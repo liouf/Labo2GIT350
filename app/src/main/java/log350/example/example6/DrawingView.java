@@ -60,6 +60,7 @@ class MyCursor {
 
 	public void addPosition( Point2D p ) {
 		positions.add( p );
+		System.out.println("Added a position");
 	}
 
 	public Point2D getFirstPosition() {
@@ -178,12 +179,14 @@ public class DrawingView extends View {
 	static final int MODE_CAMERA_MANIPULATION = 1; // the user is panning/zooming the camera
 	static final int MODE_SHAPE_MANIPULATION = 2; // the user is translating/rotating/scaling a shape
 	static final int MODE_LASSO = 3; // the user is drawing a lasso to select shapes
+	static final int MODE_DELETE = 4; // the user is drawing a lasso to select shapes
 	int currentMode = MODE_NEUTRAL;
 
 	// This is only used when currentMode==MODE_SHAPE_MANIPULATION, otherwise it is equal to -1
 	int indexOfShapeBeingManipulated = -1;
 
 	MyButton lassoButton = new MyButton( "Lasso", 10, 70, 140, 140 );
+	MyButton deleteButton = new MyButton( "Effacer", 10, 70, 140, 140 );
 	
 	OnTouchListener touchListener;
 	
@@ -255,6 +258,8 @@ public class DrawingView extends View {
 		gw.setCoordinateSystemToPixels();
 
 		lassoButton.draw( gw, currentMode == MODE_LASSO );
+		lassoButton.draw( gw, currentMode == MODE_LASSO );
+		deleteButton.draw( gw, currentMode == MODE_DELETE );
 
 		if ( currentMode == MODE_LASSO ) {
 			MyCursor lassoCursor = cursorContainer.getCursorByType( MyCursor.TYPE_DRAGGING, 0 );
@@ -341,6 +346,8 @@ public class DrawingView extends View {
 					}
 					
 					switch ( currentMode ) {
+
+					//TODO: Add the extra functions here as MODES (camera pan and other)
 					case MODE_NEUTRAL :
 						if ( cursorContainer.getNumCursors() == 1 && type == MotionEvent.ACTION_DOWN ) {
 							Point2D p_pixels = new Point2D(x,y);
@@ -349,6 +356,9 @@ public class DrawingView extends View {
 							if ( lassoButton.contains(p_pixels) ) {
 								currentMode = MODE_LASSO;
 								cursor.setType( MyCursor.TYPE_BUTTON );
+							}	else if ( deleteButton.contains(p_pixels) ) {
+								currentMode = MODE_DELETE;
+								cursor.setType( MyCursor.TYPE_DRAGGING );
 							}
 							else if ( indexOfShapeBeingManipulated >= 0 ) {
 								currentMode = MODE_SHAPE_MANIPULATION;
@@ -372,6 +382,24 @@ public class DrawingView extends View {
 								cursor1.getCurrentPosition()
 							);
 						}
+						//Added functionality to pan objects.
+						else if ( cursorContainer.getNumCursors() == 1 && type == MotionEvent.ACTION_MOVE ) {
+							MyCursor cursor0 = cursorContainer.getCursorByIndex( 0 );
+							// MyCursor cursor1 = cursorContainer.getCursorByIndex( 1 );
+							// MyCursor otherCursor = ( cursor == cursor0 ) ? cursor1 : cursor0;
+
+							// Compute midpoints of each pair of points
+							Point2D M1 = cursor0.getPreviousPosition();
+							Point2D M2 = cursor0.getCurrentPosition();
+
+							// This is the translation that the world should appear to undergo.
+							Vector2D translation = Point2D.diff( M2, M1 );
+
+						gw.pan(
+								translation.x(),
+								translation.y()
+							);
+						}
 						else if ( type == MotionEvent.ACTION_UP ) {
 							cursorContainer.removeCursorByIndex( cursorIndex );
 							if ( cursorContainer.getNumCursors() == 0 )
@@ -390,6 +418,17 @@ public class DrawingView extends View {
 								gw.convertPixelsToWorldSpaceUnits( cursor1.getPreviousPosition() ),
 								gw.convertPixelsToWorldSpaceUnits( cursor0.getCurrentPosition() ),
 								gw.convertPixelsToWorldSpaceUnits( cursor1.getCurrentPosition() )
+							);
+						} else 	if (cursorContainer.getNumCursors() == 1 && type == MotionEvent.ACTION_MOVE && indexOfShapeBeingManipulated>=0 ) {
+
+							//Pan a shape
+							MyCursor cursor0 = cursorContainer.getCursorByIndex( 0 );
+							Shape shape = shapeContainer.getShape( indexOfShapeBeingManipulated );
+
+							Point2DUtil.panBasedOnDisplacementOfOnePoint(
+									shape.getPoints(),
+									gw.convertPixelsToWorldSpaceUnits( cursor0.getPreviousPosition() ),
+									gw.convertPixelsToWorldSpaceUnits( cursor0.getCurrentPosition() )
 							);
 						}
 						else if ( type == MotionEvent.ACTION_UP ) {
@@ -434,8 +473,28 @@ public class DrawingView extends View {
 							}
 						}
 						break;
+						case MODE_DELETE :
+							if ( type == MotionEvent.ACTION_DOWN ) {
+								if (indexOfShapeBeingManipulated>=0) {
+
+								}
+								//selectedShapes.
+								selectedShapes.clear();
+								if ( cursorContainer.getNumCursorsOfGivenType(MyCursor.TYPE_DRAGGING) == 1 )
+									// there's already a finger dragging out the lasso
+									cursor.setType(MyCursor.TYPE_IGNORE);
+								else
+									cursor.setType(MyCursor.TYPE_DRAGGING);
+							}
+							else if ( type == MotionEvent.ACTION_MOVE ) {
+								// no further updating necessary here
+							}
+							else if ( type == MotionEvent.ACTION_UP ) {
+
+							}
+							break;
 					}
-					
+
 					v.invalidate();
 					
 					return true;

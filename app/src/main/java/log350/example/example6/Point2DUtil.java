@@ -359,6 +359,23 @@ public class Point2DUtil {
 		return true;
 	}
 
+
+	static public void panBasedOnDisplacementOfOnePoint(
+			ArrayList<Point2D> points,
+			// these should, of course, be in the same coordinate system as the points to transform
+			Point2D P_old,
+			Point2D P_new
+	) {
+		Vector2D translation = Point2D.diff( P_old, P_new );
+
+		for ( Point2D p : points ) {
+			float relativeX = p.x() - translation.x();
+			float relativeY = p.y() - translation.y();
+			p.get()[0] = relativeX;//New point X
+			p.get()[1] = relativeY;//New point Y
+		}
+	}
+
 	// Imagine a sheet of paper on a horizontal surface,
 	// and imagine the user places a finger tip on the sheet of paper
 	// and then drags their finger.
