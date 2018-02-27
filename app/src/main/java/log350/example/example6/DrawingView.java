@@ -60,7 +60,6 @@ class MyCursor {
 
 	public void addPosition( Point2D p ) {
 		positions.add( p );
-		System.out.println("Added a position");
 	}
 
 	public Point2D getFirstPosition() {
@@ -173,6 +172,7 @@ public class DrawingView extends View {
 
 	ShapeContainer shapeContainer = new ShapeContainer();
 	ArrayList< Shape > selectedShapes = new ArrayList< Shape >();
+	AlignedRectangle2D selectionPolygon = new AlignedRectangle2D();
 	CursorContainer cursorContainer = new CursorContainer();
 
 	static final int MODE_NEUTRAL = 0; // the default mode
@@ -180,13 +180,16 @@ public class DrawingView extends View {
 	static final int MODE_SHAPE_MANIPULATION = 2; // the user is translating/rotating/scaling a shape
 	static final int MODE_LASSO = 3; // the user is drawing a lasso to select shapes
 	static final int MODE_DELETE = 4; // the user is drawing a lasso to select shapes
+	static final int MODE_FRAME = 5; // the user is drawing a lasso to select shapes
+	static final int MODE_SELECTION_MANIPULATION = 6; // the user is drawing a lasso to select shapes
 	int currentMode = MODE_NEUTRAL;
 
 	// This is only used when currentMode==MODE_SHAPE_MANIPULATION, otherwise it is equal to -1
 	int indexOfShapeBeingManipulated = -1;
 
 	MyButton lassoButton = new MyButton( "Lasso", 10, 70, 140, 140 );
-	MyButton deleteButton = new MyButton( "Effacer", 10, 70, 140, 140 );
+	MyButton deleteButton = new MyButton( "Effacer", 10, 230, 140, 140 );
+	MyButton frameButton = new MyButton( "Encadrer", 10, 390, 140, 140 );
 	
 	OnTouchListener touchListener;
 	
@@ -238,15 +241,16 @@ public class DrawingView extends View {
 		// draw a polygon around the currently selected shapes
 		if ( selectedShapes.size() > 0 ) {
 			ArrayList< Point2D > points = new ArrayList< Point2D >();
-			AlignedRectangle2D rect = new AlignedRectangle2D();
+			selectionPolygon.clear();
+
 			for ( Shape s : selectedShapes ) {
 				for ( Point2D p : s.getPoints() ) {
 					points.add( p );
-					rect.bound( p );
+					selectionPolygon.bound( p );
 				}
 			}
 			points = Point2DUtil.computeConvexHull( points );
-			points = Point2DUtil.computeExpandedPolygon( points, rect.getDiagonal().length()/30 );
+			points = Point2DUtil.computeExpandedPolygon( points, selectionPolygon.getDiagonal().length()/30 );
 
 			gw.setColor( 1.0f, 0.0f, 0.0f, 0.8f );
 			gw.fillPolygon( points );
@@ -258,8 +262,8 @@ public class DrawingView extends View {
 		gw.setCoordinateSystemToPixels();
 
 		lassoButton.draw( gw, currentMode == MODE_LASSO );
-		lassoButton.draw( gw, currentMode == MODE_LASSO );
 		deleteButton.draw( gw, currentMode == MODE_DELETE );
+		frameButton.draw( gw, currentMode == MODE_FRAME );
 
 		if ( currentMode == MODE_LASSO ) {
 			MyCursor lassoCursor = cursorContainer.getCursorByType( MyCursor.TYPE_DRAGGING, 0 );
@@ -354,10 +358,22 @@ public class DrawingView extends View {
 							Point2D p_world = gw.convertPixelsToWorldSpaceUnits( p_pixels );
 							indexOfShapeBeingManipulated = shapeContainer.indexOfShapeContainingGivenPoint( p_world );
 							if ( lassoButton.contains(p_pixels) ) {
+								selectedShapes.clear();
+								selectionPolygon.clear();
 								currentMode = MODE_LASSO;
 								cursor.setType( MyCursor.TYPE_BUTTON );
-							}	else if ( deleteButton.contains(p_pixels) ) {
+							}
+							else if ( deleteButton.contains(p_pixels) ) {
 								currentMode = MODE_DELETE;
+								cursor.setType( MyCursor.TYPE_BUTTON );
+							}
+							else if ( frameButton.contains(p_pixels) ) {
+								gw.frame(shapeContainer.getBoundingRectangle(), true);
+								cursorContainer.removeCursorByIndex( cursorIndex );
+
+							}
+							else if ( selectionPolygon.contains(p_pixels)  ) {
+								currentMode = MODE_SELECTION_MANIPULATION;
 								cursor.setType( MyCursor.TYPE_DRAGGING );
 							}
 							else if ( indexOfShapeBeingManipulated >= 0 ) {
@@ -385,8 +401,6 @@ public class DrawingView extends View {
 						//Added functionality to pan objects.
 						else if ( cursorContainer.getNumCursors() == 1 && type == MotionEvent.ACTION_MOVE ) {
 							MyCursor cursor0 = cursorContainer.getCursorByIndex( 0 );
-							// MyCursor cursor1 = cursorContainer.getCursorByIndex( 1 );
-							// MyCursor otherCursor = ( cursor == cursor0 ) ? cursor1 : cursor0;
 
 							// Compute midpoints of each pair of points
 							Point2D M1 = cursor0.getPreviousPosition();
@@ -394,7 +408,6 @@ public class DrawingView extends View {
 
 							// This is the translation that the world should appear to undergo.
 							Vector2D translation = Point2D.diff( M2, M1 );
-
 						gw.pan(
 								translation.x(),
 								translation.y()
@@ -407,7 +420,7 @@ public class DrawingView extends View {
 						}
 						break;
 					case MODE_SHAPE_MANIPULATION :
-						if ( cursorContainer.getNumCursors() == 2 && type == MotionEvent.ACTION_MOVE && indexOfShapeBeingManipulated>=0 ) {
+						if ( cursorContainer.getNumCursors() == 2 && type == MotionEvent.ACTION_MOVE && indexOfShapeBeingManipulated>=0  ) {
 							MyCursor cursor0 = cursorContainer.getCursorByIndex( 0 );
 							MyCursor cursor1 = cursorContainer.getCursorByIndex( 1 );
 							Shape shape = shapeContainer.getShape( indexOfShapeBeingManipulated );
@@ -419,7 +432,8 @@ public class DrawingView extends View {
 								gw.convertPixelsToWorldSpaceUnits( cursor0.getCurrentPosition() ),
 								gw.convertPixelsToWorldSpaceUnits( cursor1.getCurrentPosition() )
 							);
-						} else 	if (cursorContainer.getNumCursors() == 1 && type == MotionEvent.ACTION_MOVE && indexOfShapeBeingManipulated>=0 ) {
+						}
+						else if (cursorContainer.getNumCursors() == 1 && type == MotionEvent.ACTION_MOVE && indexOfShapeBeingManipulated>=0 ) {
 
 							//Pan a shape
 							MyCursor cursor0 = cursorContainer.getCursorByIndex( 0 );
@@ -473,30 +487,49 @@ public class DrawingView extends View {
 							}
 						}
 						break;
-						case MODE_DELETE :
-							if ( type == MotionEvent.ACTION_DOWN ) {
-								if (indexOfShapeBeingManipulated>=0) {
+					case MODE_DELETE :
+						if ( type == MotionEvent.ACTION_DOWN ) {
+							if (indexOfShapeBeingManipulated>=0) {
+								shapeContainer.removeShape(shapeContainer.getShape(indexOfShapeBeingManipulated));
+							}
 
-								}
-								//selectedShapes.
-								selectedShapes.clear();
-								if ( cursorContainer.getNumCursorsOfGivenType(MyCursor.TYPE_DRAGGING) == 1 )
-									// there's already a finger dragging out the lasso
-									cursor.setType(MyCursor.TYPE_IGNORE);
-								else
-									cursor.setType(MyCursor.TYPE_DRAGGING);
+							if ( cursorContainer.getNumCursorsOfGivenType(MyCursor.TYPE_DRAGGING) == 1 )
+								// there's already a finger dragging out the lasso
+								cursor.setType(MyCursor.TYPE_IGNORE);
+						}
+						else if ( type == MotionEvent.ACTION_MOVE ) {
+							// no further updating necessary here
+						}
+						else if ( type == MotionEvent.ACTION_UP ) {
+							cursorContainer.removeCursorByIndex( cursorIndex );
+							if ( cursorContainer.getNumCursors() == 0 ) {
+								currentMode = MODE_NEUTRAL;
 							}
-							else if ( type == MotionEvent.ACTION_MOVE ) {
-								// no further updating necessary here
-							}
-							else if ( type == MotionEvent.ACTION_UP ) {
+						}
+						break;
 
+					case MODE_SELECTION_MANIPULATION :
+						if (cursorContainer.getNumCursors() == 1 && type == MotionEvent.ACTION_MOVE ) {
+							MyCursor cursor0 = cursorContainer.getCursorByIndex( 0 );
+							//Pan the selection
+							for (Shape s : selectedShapes) {
+								Point2DUtil.panBasedOnDisplacementOfOnePoint(
+										s.getPoints(),
+										gw.convertPixelsToWorldSpaceUnits( cursor0.getPreviousPosition() ),
+										gw.convertPixelsToWorldSpaceUnits( cursor0.getCurrentPosition() )
+								);
 							}
-							break;
+						} else if ( type == MotionEvent.ACTION_UP ) {
+							cursorContainer.removeCursorByIndex( cursorIndex );
+							if ( cursorContainer.getNumCursors() == 0 ) {
+								currentMode = MODE_NEUTRAL;
+							}
+						}
+
+						break;
 					}
 
 					v.invalidate();
-					
 					return true;
 				}
 			};
