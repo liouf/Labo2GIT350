@@ -180,8 +180,8 @@ public class DrawingView extends View {
 	static final int MODE_SHAPE_MANIPULATION = 2; // the user is translating/rotating/scaling a shape
 	static final int MODE_LASSO = 3; // the user is drawing a lasso to select shapes
 	static final int MODE_DELETE = 4; // the user is drawing a lasso to select shapes
-	static final int MODE_FRAME = 5; // the user is drawing a lasso to select shapes
-	static final int MODE_SELECTION_MANIPULATION = 6; // the user is drawing a lasso to select shapes
+	static final int MODE_FRAME = 5; // the user is pressing the button to frame the scene
+	static final int MODE_SELECTION_MANIPULATION = 6; // the user is dragging the lasso's selection
 	int currentMode = MODE_NEUTRAL;
 
 	// This is only used when currentMode==MODE_SHAPE_MANIPULATION, otherwise it is equal to -1
@@ -489,18 +489,32 @@ public class DrawingView extends View {
 						break;
 					case MODE_DELETE :
 						if ( type == MotionEvent.ACTION_DOWN ) {
-							if (indexOfShapeBeingManipulated>=0) {
-								shapeContainer.removeShape(shapeContainer.getShape(indexOfShapeBeingManipulated));
-							}
-
 							if ( cursorContainer.getNumCursorsOfGivenType(MyCursor.TYPE_DRAGGING) == 1 )
 								// there's already a finger dragging out the lasso
 								cursor.setType(MyCursor.TYPE_IGNORE);
+							else
+								cursor.setType(MyCursor.TYPE_DRAGGING);
 						}
 						else if ( type == MotionEvent.ACTION_MOVE ) {
 							// no further updating necessary here
 						}
 						else if ( type == MotionEvent.ACTION_UP ) {
+							if ( cursor.getType() == MyCursor.TYPE_DRAGGING ) {
+								// complete a lasso selection
+								selectedShapes.clear();
+
+								// Need to transform the positions of the cursor from pixels to world space coordinates.
+								// We will store the world space coordinates in the following data structure.
+								ArrayList< Point2D > lassoPolygonPoints = new ArrayList< Point2D >();
+								for ( Point2D p : cursor.getPositions() )
+									lassoPolygonPoints.add( gw.convertPixelsToWorldSpaceUnits( p ) );
+
+								for ( Shape s : shapeContainer.shapes ) {
+									if ( s.isContainedInLassoPolygon( lassoPolygonPoints ) ) {
+										selectedShapes.add( s );
+									}
+								}
+							}
 							cursorContainer.removeCursorByIndex( cursorIndex );
 							if ( cursorContainer.getNumCursors() == 0 ) {
 								currentMode = MODE_NEUTRAL;
