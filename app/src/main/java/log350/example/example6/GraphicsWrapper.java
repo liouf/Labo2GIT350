@@ -229,6 +229,31 @@ class GraphicsWrapper {
 		canvas.drawPath( path, paint );
 	}
 
+	public void unfillPolygon( ArrayList< Point2D > points ) {
+		undrawPolyline( points, true, true );
+	}
+
+
+	public void undrawPolyline( ArrayList< Point2D > points, boolean isClosed, boolean isFilled ) {
+		if ( points.size() <= 1 )
+			return;
+
+		path.reset();
+		Point2D p = points.get(0);
+		path.moveTo( p.x(), p.y() );
+		for ( int i = 1; i < points.size(); ++i ) {
+			p = points.get(i);
+			path.lineTo( p.x(), p.y() );
+		}
+		if ( isClosed )
+			path.close();
+		setColor(0,0,0);
+		paint.setStyle( isFilled ? Paint.Style.FILL : Paint.Style.STROKE );
+		// TODO FIXME XXX or should i call path.setFillType() ?
+		canvas.drawPath( path, paint );
+		setColor(0,0,0);
+	}
+
 	public void drawPolyline( ArrayList< Point2D > points ) {
 		drawPolyline( points, false, false );
 	}

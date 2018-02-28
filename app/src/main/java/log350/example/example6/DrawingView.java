@@ -489,32 +489,20 @@ public class DrawingView extends View {
 						break;
 					case MODE_DELETE :
 						if ( type == MotionEvent.ACTION_DOWN ) {
-							if ( cursorContainer.getNumCursorsOfGivenType(MyCursor.TYPE_DRAGGING) == 1 )
-								// there's already a finger dragging out the lasso
-								cursor.setType(MyCursor.TYPE_IGNORE);
+							if ( cursorContainer.getNumCursorsOfGivenType(MyCursor.TYPE_BUTTON) == 1 ) {
+								Point2D p_pixels = new Point2D(x,y);
+								Point2D p_world = gw.convertPixelsToWorldSpaceUnits( p_pixels );
+								indexOfShapeBeingManipulated = shapeContainer.indexOfShapeContainingGivenPoint( p_world );
+								Shape s = shapeContainer.getShape(indexOfShapeBeingManipulated);
+								gw.setColor(0, 0, 0);
+								gw.fillPolygon(s.getPoints());
+								selectedShapes.remove(s);
+								shapeContainer.removeShape(p_world);
+							}
 							else
-								cursor.setType(MyCursor.TYPE_DRAGGING);
-						}
-						else if ( type == MotionEvent.ACTION_MOVE ) {
-							// no further updating necessary here
+								cursor.setType(MyCursor.TYPE_BUTTON);
 						}
 						else if ( type == MotionEvent.ACTION_UP ) {
-							if ( cursor.getType() == MyCursor.TYPE_DRAGGING ) {
-								// complete a lasso selection
-								selectedShapes.clear();
-
-								// Need to transform the positions of the cursor from pixels to world space coordinates.
-								// We will store the world space coordinates in the following data structure.
-								ArrayList< Point2D > lassoPolygonPoints = new ArrayList< Point2D >();
-								for ( Point2D p : cursor.getPositions() )
-									lassoPolygonPoints.add( gw.convertPixelsToWorldSpaceUnits( p ) );
-
-								for ( Shape s : shapeContainer.shapes ) {
-									if ( s.isContainedInLassoPolygon( lassoPolygonPoints ) ) {
-										selectedShapes.add( s );
-									}
-								}
-							}
 							cursorContainer.removeCursorByIndex( cursorIndex );
 							if ( cursorContainer.getNumCursors() == 0 ) {
 								currentMode = MODE_NEUTRAL;
