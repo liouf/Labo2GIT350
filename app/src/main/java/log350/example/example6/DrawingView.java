@@ -160,6 +160,8 @@ class CursorContainer {
 	public void removeCursorByIndex( int index ) {
 		cursors.remove( index );
 	}
+
+	public void removeAllCursors() {cursors.clear();}
 }
 
 
@@ -182,6 +184,7 @@ public class DrawingView extends View {
 	static final int MODE_DELETE = 4; // the user is drawing a lasso to select shapes
 	static final int MODE_FRAME = 5; // the user is pressing the button to frame the scene
 	static final int MODE_SELECTION_MANIPULATION = 6; // the user is dragging the lasso's selection
+	static final int MODE_CREATE = 7; // the user is dragging the lasso's selection
 	int currentMode = MODE_NEUTRAL;
 
 	// This is only used when currentMode==MODE_SHAPE_MANIPULATION, otherwise it is equal to -1
@@ -190,6 +193,7 @@ public class DrawingView extends View {
 	MyButton lassoButton = new MyButton( "Lasso", 10, 70, 140, 140 );
 	MyButton deleteButton = new MyButton( "Effacer", 10, 230, 140, 140 );
 	MyButton frameButton = new MyButton( "Encadrer", 10, 390, 140, 140 );
+	MyButton createButton = new MyButton( "Créer", 10, 550, 140, 140 );
 	
 	OnTouchListener touchListener;
 	
@@ -264,6 +268,7 @@ public class DrawingView extends View {
 		lassoButton.draw( gw, currentMode == MODE_LASSO );
 		deleteButton.draw( gw, currentMode == MODE_DELETE );
 		frameButton.draw( gw, currentMode == MODE_FRAME );
+		createButton.draw( gw, currentMode == MODE_CREATE );
 
 		if ( currentMode == MODE_LASSO ) {
 			MyCursor lassoCursor = cursorContainer.getCursorByType( MyCursor.TYPE_DRAGGING, 0 );
@@ -271,6 +276,24 @@ public class DrawingView extends View {
 				gw.setColor(1.0f,0.0f,0.0f,0.5f);
 				gw.fillPolygon( lassoCursor.getPositions() );
 			}
+		}
+
+		if ( currentMode == MODE_CREATE ) {
+			int totalDraggingCursors = cursorContainer.getNumCursorsOfGivenType(MyCursor.TYPE_DRAGGING);
+			if (totalDraggingCursors > 2) {
+				ArrayList<MyCursor> creationCursors = new ArrayList<MyCursor>();
+				ArrayList<Point2D> creationPoints = new ArrayList<Point2D>();
+				for(int i = 0; i < totalDraggingCursors; i++) {
+					creationCursors.add(cursorContainer.getCursorByType(MyCursor.TYPE_DRAGGING, i));
+				}
+				for (MyCursor cursor : creationCursors) {
+					creationPoints.add(cursor.getCurrentPosition());
+				}
+				creationPoints = Point2DUtil.computeConvexHull( creationPoints );
+				gw.setColor(1.0f,0.0f,0.0f,0.5f);
+				gw.fillPolygon( creationPoints );
+			}
+
 		}
 
 		if ( cursorContainer.getNumCursors() > 0 ) {
@@ -370,9 +393,12 @@ public class DrawingView extends View {
 							else if ( frameButton.contains(p_pixels) ) {
 								gw.frame(shapeContainer.getBoundingRectangle(), true);
 								cursorContainer.removeCursorByIndex( cursorIndex );
-
 							}
-							else if ( selectionPolygon.contains(p_pixels)  ) {
+							else if ( createButton.contains(p_pixels) ) {
+								currentMode = MODE_CREATE;
+								cursor.setType(MyCursor.TYPE_BUTTON);
+							}
+							else if ( selectionPolygon.contains(p_world)  ) {
 								currentMode = MODE_SELECTION_MANIPULATION;
 								cursor.setType( MyCursor.TYPE_DRAGGING );
 							}
@@ -493,11 +519,14 @@ public class DrawingView extends View {
 								Point2D p_pixels = new Point2D(x,y);
 								Point2D p_world = gw.convertPixelsToWorldSpaceUnits( p_pixels );
 								indexOfShapeBeingManipulated = shapeContainer.indexOfShapeContainingGivenPoint( p_world );
-								Shape s = shapeContainer.getShape(indexOfShapeBeingManipulated);
-								gw.setColor(0, 0, 0);
-								gw.fillPolygon(s.getPoints());
-								selectedShapes.remove(s);
-								shapeContainer.removeShape(p_world);
+								if (indexOfShapeBeingManipulated > -1) {
+									Shape s = shapeContainer.getShape(indexOfShapeBeingManipulated);
+									//gw.setColor(0, 0, 0);
+									//gw.fillPolygon(s.getPoints());
+									selectedShapes.remove(s);
+									shapeContainer.removeShape(p_world);
+									indexOfShapeBeingManipulated = -1;
+								}
 							}
 							else
 								cursor.setType(MyCursor.TYPE_BUTTON);
@@ -529,6 +558,37 @@ public class DrawingView extends View {
 						}
 
 						break;
+					case MODE_CREATE :
+							if ( type == MotionEvent.ACTION_DOWN ) {
+								if ( cursorContainer.getNumCursorsOfGivenType(MyCursor.TYPE_BUTTON) == 1 ) {
+									cursor.setType(MyCursor.TYPE_DRAGGING);
+								}
+							}
+							else if ( type == MotionEvent.ACTION_UP ) {
+								cursorContainer.removeCursorByIndex( cursorIndex );
+								if ( cursorContainer.getNumCursorsOfGivenType(MyCursor.TYPE_BUTTON) == 0 ) {
+									int totalDraggingCursors = cursorContainer.getNumCursorsOfGivenType(MyCursor.TYPE_DRAGGING);
+
+									if (totalDraggingCursors > 2) {
+										ArrayList<MyCursor> creationCursors = new ArrayList<MyCursor>();
+										ArrayList<Point2D> creationPoints = new ArrayList<Point2D>();
+										for(int i = 0; i < totalDraggingCursors; i++) {
+											creationCursors.add(cursorContainer.getCursorByType(MyCursor.TYPE_DRAGGING, i));
+										}
+										for (MyCursor creationCursor : creationCursors) {
+											creationPoints.add(gw.convertPixelsToWorldSpaceUnits(creationCursor.getCurrentPosition()));
+										}
+										cursorContainer.removeAllCursors();
+										creationPoints = Point2DUtil.computeConvexHull( creationPoints );
+										shapeContainer.addShape(creationPoints);
+										creationPoints.clear();
+										creationCursors.clear();
+
+									}
+									currentMode = MODE_NEUTRAL;
+								}
+							}
+							break;
 					}
 
 					v.invalidate();
